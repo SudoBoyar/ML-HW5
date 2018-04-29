@@ -12,16 +12,18 @@ class ModelConfig(object):
     maxpool: int or int[]: maxpool sample count (list: at each layer)
     dropout: float or float[]: dropout rate (list: at each layer)
     fc_units: int: Number of neurons in the fully connected layer
+    num_classes: int: Number of classes being predicted
     """
 
     def __init__(self, **kwargs):
         self.nconv = kwargs.get('nconv', 2)
         self.nfilters = kwargs.get('nfilters', [32, 64])
         self.stride = kwargs.get('stride', [1, 1, 1, 1])
-        self.kernel_size = kwargs.get('kernel', 5)
+        self.kernel = kwargs.get('kernel', 5)
         self.maxpool = kwargs.get('maxpool', 2)
         self.dropout = kwargs.get('dropout', 0.2)
         self.fc_units = kwargs.get('fc_units', 1024)
+        self.num_classes = kwargs.get('num_classes', 9)
 
     def get(self, attr, layer=None):
         if not hasattr(self, attr):
@@ -73,11 +75,11 @@ def dropout(in_tensors, is_training, configs, layer):
 
 
 def fc_layer(in_tensors, configs, layer):
-    return tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, configs.get('fc_units')))
+    return tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, configs, layer))
 
 
 def fc_no_activation_layer(in_tensors, configs, layer):
-    n_units = configs.get('fc_units')
+    n_units = configs.get('num_classes')
     w = tf.get_variable('fc_W',
                         [in_tensors.get_shape()[1], n_units],
                         tf.float32,
@@ -97,8 +99,9 @@ def build_model(in_tensors, configs, is_training):
     for i in range(1, configs.get('nconv') + 1):
         with tf.variable_scope('conv{}'.format(i)):
             # l1 = maxpool_layer(conv_layer(in_tensors, 5, 32), 2)
-            partial = maxpool_layer(conv_layer(out_layers[-1], configs, layer), configs, layer)
-            out_layers.append(dropout(partial, is_training, configs, layer))
+            conv = conv_layer(out_layers[-1], configs, layer)
+            maxpool = maxpool_layer(conv, configs, layer)
+            out_layers.append(dropout(maxpool, is_training, configs, layer))
         layer += 1
 
     with tf.variable_scope('flatten'):
@@ -106,7 +109,7 @@ def build_model(in_tensors, configs, is_training):
 
     # Fully collected layer, 1024 neurons, 40% dropout
     with tf.variable_scope('fc'):
-        l3 = fc_layer(out_layers[-1], configs)
+        l3 = fc_layer(out_layers[-1], configs, layer)
         out_layers.append(dropout(l3, is_training, configs, layer))
     layer += 1
 
