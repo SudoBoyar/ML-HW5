@@ -1,5 +1,10 @@
+import matplotlib
+matplotlib.use('agg')
+
 import argparse
+import os
 import sys
+from time import time
 
 from data import load_data
 from model import ModelConfig, build_model
@@ -8,6 +13,30 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
+
+
+class Timer(object):
+    """
+    with Timer("name"): to make timing easier
+    """
+
+    def __init__(self, name=None, output=True):
+        self.name = name
+        self.output = output
+        self.elapsed = 0.0
+
+    def __enter__(self):
+        self.start = time()
+        return self
+
+    def __exit__(self, *args):
+        self.end = time()
+        self.elapsed = self.end - self.start
+        if self.output:
+            print(self)
+
+    def __str__(self):
+        return "{}: {:0.6f} seconds".format(self.name, self.elapsed) if self.name else "{:0.6f} seconds".format(self.elapsed)
 
 
 def main(args):
@@ -30,18 +59,20 @@ def main(args):
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
-        for epoch in range(args.epochs):
-            print("Epoch=", epoch)
-            tf_score = []
+        with Timer("Training"):
+            for epoch in range(args.epochs):
+                with Timer("Epoch #{}".format(epoch)):
+                    print("Epoch=", epoch)
+                    tf_score = []
 
-            for mb in minibatcher(x_train, y_train, args.batch_size, shuffle=True):
-                tf_output = session.run([optimizer, loss],
-                                        feed_dict={in_tensors: mb[0],
-                                                   in_classes: mb[1],
-                                                   is_training: True})
+                    for mb in minibatcher(x_train, y_train, args.batch_size, shuffle=True):
+                        tf_output = session.run([optimizer, loss],
+                                                feed_dict={in_tensors: mb[0],
+                                                           in_classes: mb[1],
+                                                           is_training: True})
 
-                tf_score.append(tf_output[1])
-            print(" train_loss_score=", np.mean(tf_score))
+                        tf_score.append(tf_output[1])
+                    print(" train_loss_score=", np.mean(tf_score))
 
         # after the training is done, time to test it on the test set
         print("TEST SET PERFORMANCE")
@@ -55,22 +86,25 @@ def main(args):
         y_test_true_classified = np.argmax(y_test, axis=1).astype(np.int32)
         print(classification_report(y_test_true_classified, y_test_pred_classified))
 
+        output_dir = args.outputdir
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+
         cm = confusion_matrix(y_test_true_classified, y_test_pred_classified)
 
         plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         plt.colorbar()
         plt.tight_layout()
-        plt.show()
+        plt.savefig(os.path.join(output_dir, 'confusion.png'))
 
         # And the log2 version, to enphasize the misclassifications
         plt.imshow(np.log2(cm + 1), interpolation='nearest', cmap=plt.get_cmap("tab20"))
         plt.colorbar()
         plt.tight_layout()
-        plt.show()
+        plt.savefig(os.path.join(output_dir, 'confusion_log.png'))
 
 
 def minibatcher(X, y, batch_size, shuffle):
-    print(X.shape, y.shape)
     assert X.shape[0] == y.shape[0]
     n_samples = X.shape[0]
 
@@ -83,6 +117,7 @@ def minibatcher(X, y, batch_size, shuffle):
         from_idx = k * batch_size
         to_idx = (k + 1) * batch_size
         yield X[idx[from_idx:to_idx], :, :, :], y[idx[from_idx:to_idx], :]
+
 
 def parse_args(args):
     parser = argparse.ArgumentParser()
@@ -102,7 +137,9 @@ def parse_args(args):
     parser.add_argument('-r', '--learn_rate', dest='learn_rate', metavar='d', type=float, default=0.001)
     parser.add_argument('-b', '--batch_size', dest='batch_size', metavar='s', type=int, default=256)
     parser.add_argument('-e', '--epochs', dest='epochs', metavar='n', type=int, default=256)
+    parser.add_argument('-a', '--activation', dest='activation', choices=['r', 'lr'], default='lr')
     parser.add_argument('datadir', default='dataset')
+    parser.add_argument('outputdir', default='out')
 
     return parser.parse_args(args)
 

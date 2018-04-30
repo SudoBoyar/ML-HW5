@@ -13,6 +13,7 @@ class ModelConfig(object):
     dropout: float or float[]: dropout rate (list: at each layer)
     fc_units: int: Number of neurons in the fully connected layer
     num_classes: int: Number of classes being predicted
+    activation: str: r or lr for relu or leaky_relu
     """
 
     def __init__(self, **kwargs):
@@ -24,6 +25,7 @@ class ModelConfig(object):
         self.dropout = kwargs.get('dropout', 0.2)
         self.fc_units = kwargs.get('fc_units', 1024)
         self.num_classes = kwargs.get('num_classes', 9)
+        self.activation = kwargs.get('activation')
 
     def get(self, attr, layer=None):
         if not hasattr(self, attr):
@@ -75,7 +77,8 @@ def dropout(in_tensors, is_training, configs, layer):
 
 
 def fc_layer(in_tensors, configs, layer):
-    return tf.nn.leaky_relu(fc_no_activation_layer(in_tensors, configs, layer))
+    na = fc_no_activation_layer(in_tensors, configs, layer)
+    return tf.nn.leaky_relu(na) if configs.get('activation', layer) == 'lr' else tf.nn.relu(na)
 
 
 def fc_no_activation_layer(in_tensors, configs, layer):
