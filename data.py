@@ -21,9 +21,8 @@ def load_data(folder):
             for i, f in enumerate(sorted(os.listdir(class_path))):
                 if f[:5] != 'color':
                     break
-                if i % 3 == 0:
-                    src_paths.append(os.path.join(class_path, f))
-                    classes.append(class_repr[class_folder])
+                src_paths.append(os.path.join(class_path, f))
+                classes.append(class_repr[class_folder])
 
     images = np.zeros((len(src_paths), 64, 64, 3))
     classes = np.array(classes)
@@ -33,4 +32,4 @@ def load_data(folder):
         img.resize(shape)
         images[i] = rgb2lab(img)
 
-    return train_test_split(images, classes, test_size=.2)
+    return train_test_split(images, classes, test_size=.2, random_state=1234)
