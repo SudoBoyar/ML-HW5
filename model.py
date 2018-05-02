@@ -24,6 +24,8 @@ class ModelConfig(object):
         self.maxpool = kwargs.get('maxpool', 2)
         self.dropout = kwargs.get('dropout', 0.2)
         self.fc_units = kwargs.get('fc_units', 1024)
+        if isinstance(self.fc_units, list):
+            self.fc_units = [0] * self.nconv + self.fc_units
         self.num_classes = kwargs.get('num_classes', 9)
         self.activation = kwargs.get('activation')
 
@@ -77,12 +79,12 @@ def dropout(in_tensors, is_training, configs, layer):
 
 
 def fc_layer(in_tensors, configs, layer):
-    na = fc_no_activation_layer(in_tensors, configs, layer)
+    na = fc_no_activation_layer(in_tensors, configs, layer, configs.get('fcunits', layer))
     return tf.nn.leaky_relu(na) if configs.get('activation', layer) == 'lr' else tf.nn.relu(na)
 
 
-def fc_no_activation_layer(in_tensors, configs, layer):
-    n_units = configs.get('num_classes')
+def fc_no_activation_layer(in_tensors, configs, layer, n_units=None):
+    n_units = n_units if n_units is not None else configs.get('num_classes')
     w = tf.get_variable('fc_W',
                         [in_tensors.get_shape()[1], n_units],
                         tf.float32,
@@ -110,11 +112,17 @@ def build_model(in_tensors, configs, is_training):
     with tf.variable_scope('flatten'):
         out_layers.append(tf.layers.flatten(out_layers[-1]))
 
-    # Fully collected layer, 1024 neurons, 40% dropout
-    with tf.variable_scope('fc'):
-        l3 = fc_layer(out_layers[-1], configs, layer)
-        out_layers.append(dropout(l3, is_training, configs, layer))
+    # Fully collected layer, 1024 neurons
+    with tf.variable_scope('fc1'):
+        fc = fc_layer(out_layers[-1], configs, layer)
+        out_layers.append(dropout(fc, is_training, configs, layer))
     layer += 1
+
+    # # Fully collected layer
+    # with tf.variable_scope('fc2'):
+    #     fc2 = fc_layer(out_layers[-1], configs, layer)
+    #     out_layers.append(dropout(fc2, is_training, configs, layer))
+    # layer += 1
 
     # Output
     with tf.variable_scope('out'):
